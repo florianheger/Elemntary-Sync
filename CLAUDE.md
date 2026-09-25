@@ -4,7 +4,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project status
 
-Implementation happens in four steps: (1) project skeleton, (2) Dropbox, (3) FIT conversion, (4) Garmin upload. Step 1 is done. The three feature classes are stubs that only log and pass the file along.
+Implementation happens in four steps: (1) project skeleton, (2) Dropbox, (3) FIT conversion, (4) Garmin upload. Steps 1 and 2 are done. `FitConverter` and `GarminUploader` are still stubs that only log and pass the file along. User-facing setup lives in `README.md`.
 
 The specs live in `requirements/`: `overview.md` plus one file per feature in `requirements/features/`. Some feature files use a `.csv` extension but contain Markdown. Read the relevant spec before implementing a feature.
 
@@ -19,6 +19,7 @@ docker run --rm -v "$PWD":/build -v elemntary-m2:/root/.m2 -w /build maven:3.9-e
 - Build fat jar + run tests: `mvn package` (produces `target/elemntary-sync.jar`)
 - Tests only: `mvn test`; a single test: `mvn test -Dtest=PipelineWiringTest`
 - Run with Docker: `cp .env.example .env` (fill in credentials), then `docker compose up --build`
+- One-time Dropbox login (prints `DROPBOX_REFRESH_TOKEN`): `docker compose run --rm elemntary-sync auth-dropbox`
 
 ## Code layout
 
@@ -26,17 +27,19 @@ Base package: `de.florianheger.elemntarysync`. Each feature has its own package 
 
 `dropbox.DropboxWatcher.onNewFile` → `converter.FitConverter.processFitFile` → `uploader.GarminUploader.uploadGarminFitFile`
 
-These are the Java names for the spec's `ProcessFitFile` and `UploadGarminFitFile`. `App` reads its configuration from environment variables (see `.env.example`). `PipelineWiringTest` checks the whole call chain. In the Docker image, `FitCSVTool.jar` sits at `/app/FitCSVTool.jar`, and `/data` is a persistent volume for working files.
+These are the Java names for the spec's `ProcessFitFile` and `UploadGarminFitFile`. **Failure contract:** both methods signal failure by throwing. `DropboxWatcher` catches the exception and moves the file to `Failed`, so the uploader must throw once its retries are used up. `App` reads its configuration from environment variables (see `.env.example`). `PipelineWiringTest` checks the whole call chain.
+
+**Dropbox** (`dropbox/`): `DropboxWatcher` keeps no state. The watch folder is the queue, so on every (re)start it processes all `.fit` files directly in it. After that it uses Dropbox longpoll plus `list_folder/continue` for new files. Each file is downloaded to `WORK_DIR/incoming`, processed, then moved to `Processed` or `Failed`, and the local copy is deleted. A Dropbox error triggers a full resync after 30 s. The SDK is hidden behind `DropboxFolderClient` (real: `SdkDropboxFolderClient`, tests: `FakeDropboxFolderClient`). Auth uses a PKCE refresh token (app key only, no secret) and needs a Full Dropbox app, because Wahoo writes into its own app folder. In the Docker image, `FitCSVTool.jar` sits at `/app/FitCSVTool.jar`, and `/data` is a persistent volume for working files.
 
 ## Purpose
 
 Garmin Connect only computes stats such as training effect and calories for `.fit` files recorded by Garmin devices. Elemntary Sync rewrites the device identifiers in `.fit` files from a Wahoo Elemnt so that Garmin Connect treats them as Garmin recordings.
 
-## Architecture (planned pipeline)
+## Architecture (pipeline)
 
 The pipeline has three stages. Each stage hands off to the next by calling a named function:
 
-1. **Dropbox** (`requirements/features/dropbox.md`): watch `Apps/WahooFitness` and pick up new files within one minute. Download each new file, move it to `Apps/WahooFitness/Processed`, then call `ProcessFitFile(file)`.
+1. **Dropbox** (`requirements/features/dropbox.md`): implemented, see Code layout above.
 2. **FIT processing** (`requirements/features/fit-processing.csv`): round-trip the file through `FitCSVTool.jar`, which is checked into the repo root:
    - `java -jar FitCSVTool.jar ride.fit` produces `ride.csv`.
    - Edit `ride.csv` in place. Change values on `Data` lines only; never touch `Definition` lines or the CSV structure.
