@@ -4,7 +4,29 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project status
 
-The repo holds requirements only. No source code, build files or tests exist yet. The specs live in `requirements/`: `overview.md` plus one file per feature in `requirements/features/`. Some feature files use a `.csv` extension but contain Markdown. Read the relevant spec before implementing a feature, and update this file once a build system (Maven or Gradle) and a module layout exist.
+Implementation happens in four steps: (1) project skeleton, (2) Dropbox, (3) FIT conversion, (4) Garmin upload. Step 1 is done. The three feature classes are stubs that only log and pass the file along.
+
+The specs live in `requirements/`: `overview.md` plus one file per feature in `requirements/features/`. Some feature files use a `.csv` extension but contain Markdown. Read the relevant spec before implementing a feature.
+
+## Commands
+
+The project uses Maven and Java 25 (`maven.compiler.release` 25). The local machine may only have Java 21 and no `mvn`. In that case, run Maven in a container:
+
+```
+docker run --rm -v "$PWD":/build -v elemntary-m2:/root/.m2 -w /build maven:3.9-eclipse-temurin-25 mvn -B package
+```
+
+- Build fat jar + run tests: `mvn package` (produces `target/elemntary-sync.jar`)
+- Tests only: `mvn test`; a single test: `mvn test -Dtest=PipelineWiringTest`
+- Run with Docker: `cp .env.example .env` (fill in credentials), then `docker compose up --build`
+
+## Code layout
+
+Base package: `de.florianheger.elemntarysync`. Each feature has its own package with one entry class. Calls go one way, wired with constructor injection in `App.main`:
+
+`dropbox.DropboxWatcher.onNewFile` → `converter.FitConverter.processFitFile` → `uploader.GarminUploader.uploadGarminFitFile`
+
+These are the Java names for the spec's `ProcessFitFile` and `UploadGarminFitFile`. `App` reads its configuration from environment variables (see `.env.example`). `PipelineWiringTest` checks the whole call chain. In the Docker image, `FitCSVTool.jar` sits at `/app/FitCSVTool.jar`, and `/data` is a persistent volume for working files.
 
 ## Purpose
 

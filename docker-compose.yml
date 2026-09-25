@@ -1,0 +1,10 @@
+services:
+  elemntary-sync:
+    build: .
+    env_file: .env
+    restart: unless-stopped
+    volumes:
+      - data:/data
+
+volumes:
+  data:
