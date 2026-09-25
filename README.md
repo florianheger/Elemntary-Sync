@@ -20,7 +20,12 @@ You need Docker with Docker Compose.
    docker compose run --rm elemntary-sync auth-dropbox
    ```
    Open the printed link, allow access, and paste the code back. Copy the printed `DROPBOX_REFRESH_TOKEN=...` line into `.env`.
-4. **Start:**
+4. **Connect Garmin Connect** (one time):
+   ```
+   docker compose run --rm elemntary-sync auth-garmin
+   ```
+   Enter your Garmin email and password, and the verification code if your account uses two-step verification. The password isn't stored. The app keeps a login token in its data volume and renews it automatically.
+5. **Start:**
    ```
    docker compose up -d --build
    ```
@@ -34,3 +39,8 @@ You need Docker with Docker Compose.
 - After a successful sync, the file is moved to `Apps/WahooFitness/Processed`.
 - If a file can't be processed, it's moved to `Apps/WahooFitness/Failed` and the error shows in the logs (`docker compose logs`). To retry, move the file back to `Apps/WahooFitness`. The intermediate conversion files are kept in the `/data/failed/` volume for debugging.
 - Watch what happens with `docker compose logs -f`. Every new, moved or removed `.fit` file in `Apps/WahooFitness` is logged. When nothing happens, a "Still watching" line appears once an hour.
+- A ride is uploaded to Garmin Connect as recorded by a Garmin Edge 530, so Garmin calculates training effect, calories and so on. If Garmin is unreachable, the upload is retried 5 times, 30 seconds apart. A ride that is already on Garmin Connect counts as synced.
+
+## Garmin login
+
+Garmin has no official upload API for individuals, so Elemntary Sync uses the same unofficial login as the Garmin Connect app. It can break if Garmin changes its login. If the logs say `Garmin login expired or was revoked`, run the `auth-garmin` command again and move the rides from `Failed` back to `Apps/WahooFitness`.

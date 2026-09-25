@@ -1,17 +1,15 @@
 package de.florianheger.elemntarysync.uploader;
 
+import java.io.IOException;
 import java.nio.file.Path;
 
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
+/**
+ * Uploads converted .fit files to Garmin Connect. See requirements/features/garmin-upload.csv.
+ *
+ * <p>Implementations throw when the upload finally fails, so the Dropbox watcher moves the ride to
+ * {@code Failed}.
+ */
+public interface GarminUploader {
 
-/** Uploads converted .fit files to Garmin Connect. See requirements/features/garmin-upload.csv. */
-public class GarminUploader {
-
-    private static final Logger log = LoggerFactory.getLogger(GarminUploader.class);
-
-    public void uploadGarminFitFile(Path fitFile) {
-        // TODO step 4: authenticate and upload, retry after 30 seconds on failure
-        log.info("Upload requested for {} (not implemented yet)", fitFile);
-    }
+    void uploadGarminFitFile(Path fitFile) throws IOException;
 }

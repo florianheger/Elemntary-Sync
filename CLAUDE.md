@@ -4,7 +4,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project status
 
-Implementation happens in four steps: (1) project skeleton, (2) Dropbox, (3) FIT conversion, (4) Garmin upload. Steps 1–3 are done. `GarminUploader` is still a stub that only logs. User-facing setup lives in `README.md`.
+Implementation happens in four steps: (1) project skeleton, (2) Dropbox, (3) FIT conversion, (4) Garmin upload. All four steps are done. User-facing setup lives in `README.md`.
 
 The specs live in `requirements/`: `overview.md` plus one file per feature in `requirements/features/`. Some feature files use a `.csv` extension but contain Markdown. Read the relevant spec before implementing a feature.
 
@@ -21,6 +21,7 @@ docker run --rm -v "$PWD":/build -v elemntary-m2:/root/.m2 -w /build maven:3.9-e
 - Real rides can't be committed (they contain personal data). `RealSampleConversionTest` runs only when `FIT_SAMPLE_DIR` is set. With the Maven container: `docker run --rm -v "$PWD":/build -v ~/Repos:/samples:ro -e FIT_SAMPLE_DIR=/samples -v elemntary-m2:/root/.m2 -w /build maven:3.9-eclipse-temurin-25 mvn -B test -Dtest=RealSampleConversionTest`
 - Run with Docker: `cp .env.example .env` (fill in credentials), then `docker compose up --build`
 - One-time Dropbox login (prints `DROPBOX_REFRESH_TOKEN`): `docker compose run --rm elemntary-sync auth-dropbox`
+- One-time Garmin login (stores tokens in `WORK_DIR/garmin-tokens.properties`): `docker compose run --rm elemntary-sync auth-garmin`
 
 ## Code layout
 
@@ -49,7 +50,11 @@ The pipeline has three stages. Each stage hands off to the next by calling a nam
      - On `device_info` lines: clear every non-numeric `serial_number` (e.g. `1E00FB32`, the "Puls" sensor) so the field reads `serial_number,,null`. Numeric serials like `10032` stay. FitCSVTool can't encode non-numeric serials, so an unmodified round trip fails.
    - `java -jar FitCSVTool.jar -c ride.csv ride_garmin.fit` must finish without errors. Report how many lines each rule changed, and verify that no `device_index` `0` line still has manufacturer `32`.
    - Then call `UploadGarminFitFile(ride_garmin.fit)`.
-3. **Garmin upload** (`requirements/features/garmin-upload.csv`): authenticate to Garmin Connect and upload the file. If the upload fails, wait 30 seconds and retry.
+3. **Garmin upload** (`requirements/features/garmin-upload.csv`): implemented in `uploader/`. `GarminUploader` is an interface, so tests use anonymous classes or lambdas. The real implementation is `GarminConnectUploader`.
+   - **No official API.** `GarminAuthClient` copies python-garminconnect's SSO embed-widget login (github.com/cyberjunky/python-garminconnect, `_widget_web_login` / `_exchange_service_ticket`): CSRF form → wait 3–8 s → POST → `ST-` ticket → DI OAuth2 token from `diauth.garmin.com`. If Garmin changes its login, compare with that project first.
+   - **Tokens:** access ~24 h, and the refresh token **rotates** on every refresh. That's why tokens live in `WORK_DIR/garmin-tokens.properties` (mode 600), not in `.env`, and why the uploader methods are `synchronized`. `App` schedules `refreshDaily()`. Never log tokens or tickets.
+   - **Upload:** multipart POST to `connectapi.garmin.com/upload-service/upload/.fit`. `409` counts as success. `429`/`5xx`/network errors are retried: 5 attempts, 30 s apart. A rejected file (other `4xx`, or `failures` in a 2xx response) and `GarminAuthException` (expired login) fail at once.
+   - **Tests:** `FakeGarminServer` (JDK `HttpServer`) stands in for all three Garmin hosts.
 
 ## Technical constraints
 
