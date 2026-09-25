@@ -29,7 +29,7 @@ public class App {
         Path workDir = Path.of(env("WORK_DIR", "data"));
 
         GarminUploader uploader = new GarminUploader();
-        FitConverter converter = new FitConverter(uploader, fitCsvToolJar);
+        FitConverter converter = new FitConverter(uploader, fitCsvToolJar, workDir);
         DropboxWatcher watcher = new DropboxWatcher(
                 new SdkDropboxFolderClient(dropboxAppKey, dropboxRefreshToken), converter, watchFolder, workDir);
 

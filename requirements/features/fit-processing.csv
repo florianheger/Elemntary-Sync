@@ -6,6 +6,6 @@ This file contains all the functionality with the Dropbox.
 2. Edit the existing file ride.csv in place. Do not create new files. Only replace values in "Data" lines; never touch "Definition" lines or change the CSV structure.
 	2.1. On every device_info Data line where device_index is "0": change manufacturer "32" to "1" and product "63" to "3121" (if the field is named garmin_product instead of product, change that one). Leave all other device_info lines unchanged.
 	2.2. On the file_id Data line, make sure manufacturer is "1" and product is "3121"; change them if they are not.
-	2.3. On every device_info Data line containing serial_number "1E00FB32" (the "Puls" sensor), clear only that value so the field reads serial_number,,null, and keep the other, numeric serial_number ("10032").
-3. Afterwards, run "java -jar FitCSVTool.jar -c ride.csv ride_garmin.fit" and confirm it finishes without errors. Report how many lines were changed per rule and confirm that no device_index "0" line still contains manufacturer "32".
+	2.3. On every device_info Data line, clear every non-numeric serial_number value (e.g. "1E00FB32" of the "Puls" sensor) so the field reads serial_number,,null, and keep numeric ones (e.g. "10032"). FitCSVTool cannot encode non-numeric serials back into a .fit file.
+3. Afterwards, run "java -jar FitCSVTool.jar -c ride.csv ride_garmin.fit" and confirm it finishes without errors. FitCSVTool always exits with code 0, so errors must be detected from its output ("Error: ...") and a missing or empty output file. Report how many lines were changed per rule and confirm that no device_index "0" line still contains manufacturer "32".
 4. Call the function "UploadGarminFitFile(ride_garmin.fit)"

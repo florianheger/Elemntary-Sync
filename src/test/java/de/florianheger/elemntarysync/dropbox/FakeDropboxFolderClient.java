@@ -1,6 +1,7 @@
 package de.florianheger.elemntarysync.dropbox;
 
 import java.io.IOException;
+import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.ArrayDeque;
@@ -23,7 +24,7 @@ public class FakeDropboxFolderClient implements DropboxFolderClient {
         }
     }
 
-    public final Map<String, String> files = new LinkedHashMap<>();
+    public final Map<String, byte[]> files = new LinkedHashMap<>();
     public final List<Path> downloadedTo = new ArrayList<>();
     /** Runs at the start of every longpoll, e.g. to advance a test clock. */
     public Runnable onLongpoll = () -> {
@@ -33,13 +34,13 @@ public class FakeDropboxFolderClient implements DropboxFolderClient {
     private final List<Entry> deleted = new ArrayList<>();
 
     public FakeDropboxFolderClient(Map<String, String> initialFiles) {
-        files.putAll(initialFiles);
+        initialFiles.forEach((path, content) -> files.put(path, content.getBytes(StandardCharsets.UTF_8)));
     }
 
     /** Queues files that appear after the initial listing. */
     public void addLater(Map<String, String> newFiles) {
         changes.add(() -> newFiles.forEach((path, content) -> {
-            files.put(path, content);
+            files.put(path, content.getBytes(StandardCharsets.UTF_8));
             added.add(entry(path));
         }));
     }
@@ -95,7 +96,7 @@ public class FakeDropboxFolderClient implements DropboxFolderClient {
     @Override
     public void download(String path, Path target) throws IOException {
         Files.createDirectories(target.getParent());
-        Files.writeString(target, files.get(path));
+        Files.write(target, files.get(path));
         downloadedTo.add(target);
     }
 

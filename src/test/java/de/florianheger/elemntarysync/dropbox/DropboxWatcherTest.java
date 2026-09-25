@@ -36,7 +36,7 @@ class DropboxWatcherTest {
     private final List<String> processed = new ArrayList<>();
 
     /** Records processed file names and fails for names containing "broken". */
-    private final FitConverter converter = new FitConverter(null, Path.of("FitCSVTool.jar")) {
+    private final FitConverter converter = new FitConverter(null, Path.of("FitCSVTool.jar"), Path.of("unused")) {
         @Override
         public void processFitFile(Path fitFile) {
             processed.add(fitFile.getFileName().toString());

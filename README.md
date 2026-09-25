@@ -32,5 +32,5 @@ You need Docker with Docker Compose.
 
 - New files in `Apps/WahooFitness` are picked up within seconds.
 - After a successful sync, the file is moved to `Apps/WahooFitness/Processed`.
-- If a file can't be processed, it's moved to `Apps/WahooFitness/Failed` and the error shows in the logs (`docker compose logs`). To retry, move the file back to `Apps/WahooFitness`.
+- If a file can't be processed, it's moved to `Apps/WahooFitness/Failed` and the error shows in the logs (`docker compose logs`). To retry, move the file back to `Apps/WahooFitness`. The intermediate conversion files are kept in the `/data/failed/` volume for debugging.
 - Watch what happens with `docker compose logs -f`. Every new, moved or removed `.fit` file in `Apps/WahooFitness` is logged. When nothing happens, a "Still watching" line appears once an hour.
