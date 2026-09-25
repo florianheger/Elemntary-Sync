@@ -3,16 +3,26 @@ package de.florianheger.elemntarysync.dropbox;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.time.Duration;
+import java.time.Instant;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
 
+import org.junit.jupiter.api.AfterEach;
+import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
+import org.slf4j.LoggerFactory;
+
+import ch.qos.logback.classic.Logger;
+import ch.qos.logback.classic.spi.ILoggingEvent;
+import ch.qos.logback.core.read.ListAppender;
 
 import de.florianheger.elemntarysync.converter.FitConverter;
 
@@ -36,9 +46,32 @@ class DropboxWatcherTest {
         }
     };
 
+    private Instant now = Instant.parse("2026-01-01T00:00:00Z");
+    private final ListAppender<ILoggingEvent> logs = new ListAppender<>();
+    private final Logger watcherLogger = (Logger) LoggerFactory.getLogger(DropboxWatcher.class);
+
+    @BeforeEach
+    void captureLogs() {
+        logs.start();
+        watcherLogger.addAppender(logs);
+    }
+
+    @AfterEach
+    void stopCapturingLogs() {
+        watcherLogger.detachAppender(logs);
+    }
+
     private void sync(FakeDropboxFolderClient client) {
-        DropboxWatcher watcher = new DropboxWatcher(client, converter, WATCH, workDir);
+        DropboxWatcher watcher = new DropboxWatcher(client, converter, WATCH, workDir, () -> now);
         assertThrows(FakeDropboxFolderClient.StopException.class, watcher::sync);
+    }
+
+    private List<String> logMessages() {
+        return logs.list.stream().map(ILoggingEvent::getFormattedMessage).toList();
+    }
+
+    private boolean logged(String fragment) {
+        return logMessages().stream().anyMatch(message -> message.contains(fragment));
     }
 
     @Test
@@ -98,5 +131,54 @@ class DropboxWatcherTest {
 
         assertEquals(2, client.downloadedTo.size());
         client.downloadedTo.forEach(path -> assertFalse(Files.exists(path), path + " still exists"));
+    }
+
+    @Test
+    void deletionByUserIsLogged() {
+        FakeDropboxFolderClient client = new FakeDropboxFolderClient(Map.of(WATCH + "/notes.txt", "t"));
+        client.deleteLater(WATCH + "/ride.fit");
+        client.deleteLater(WATCH + "/notes.txt");
+
+        sync(client);
+
+        assertTrue(logged("Removed " + WATCH + "/ride.fit"), logMessages().toString());
+        assertFalse(logged("notes.txt"), logMessages().toString());
+    }
+
+    @Test
+    void ownMovesAreNotLoggedAsRemovals() {
+        FakeDropboxFolderClient client = new FakeDropboxFolderClient(Map.of(WATCH + "/ride.fit", "a"));
+        client.pollLater();
+
+        sync(client);
+
+        assertTrue(logged("Moved ride.fit"), logMessages().toString());
+        assertFalse(logged("Removed"), logMessages().toString());
+    }
+
+    @Test
+    void heartbeatIsLoggedAfterAnIdleHour() {
+        FakeDropboxFolderClient client = new FakeDropboxFolderClient(Map.of());
+        client.pollLater();
+        client.pollLater();
+        client.pollLater();
+        client.onLongpoll = () -> now = now.plus(Duration.ofMinutes(40));
+
+        sync(client);
+
+        // 40 min: nothing yet; 80 min: heartbeat; 120 min (only 40 min after it): nothing.
+        assertEquals(1, logMessages().stream().filter(message -> message.startsWith("Still watching")).count(),
+                logMessages().toString());
+    }
+
+    @Test
+    void startupLogsHowManyFitFilesWereFound() {
+        FakeDropboxFolderClient client = new FakeDropboxFolderClient(Map.of(
+                WATCH + "/ride.fit", "a",
+                WATCH + "/notes.txt", "t"));
+
+        sync(client);
+
+        assertTrue(logged("Found 1 .fit file(s) in " + WATCH), logMessages().toString());
     }
 }

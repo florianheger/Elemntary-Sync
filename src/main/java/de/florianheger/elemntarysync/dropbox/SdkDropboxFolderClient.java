@@ -14,6 +14,7 @@ import com.dropbox.core.http.StandardHttpRequestor;
 import com.dropbox.core.oauth.DbxCredential;
 import com.dropbox.core.v2.DbxClientV2;
 import com.dropbox.core.v2.files.CreateFolderErrorException;
+import com.dropbox.core.v2.files.DeletedMetadata;
 import com.dropbox.core.v2.files.FileMetadata;
 import com.dropbox.core.v2.files.ListFolderLongpollResult;
 import com.dropbox.core.v2.files.ListFolderResult;
@@ -63,14 +64,17 @@ public class SdkDropboxFolderClient implements DropboxFolderClient {
 
     private Listing collect(ListFolderResult result) throws DbxException {
         List<Entry> files = new ArrayList<>();
+        List<Entry> deleted = new ArrayList<>();
         while (true) {
             for (Metadata metadata : result.getEntries()) {
                 if (metadata instanceof FileMetadata file) {
                     files.add(new Entry(file.getName(), file.getPathDisplay()));
+                } else if (metadata instanceof DeletedMetadata entry) {
+                    deleted.add(new Entry(entry.getName(), entry.getPathDisplay()));
                 }
             }
             if (!result.getHasMore()) {
-                return new Listing(files, result.getCursor());
+                return new Listing(files, deleted, result.getCursor());
             }
             result = client.files().listFolderContinue(result.getCursor());
         }
