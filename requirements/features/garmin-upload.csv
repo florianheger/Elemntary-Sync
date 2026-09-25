@@ -1,0 +1,6 @@
+# Garmin Connect Upload
+This file contains all the functionality with the Dropbox.
+
+## Requirements
+1. Be able to authenticate to Garmin Connect and upload files to it.
+2. If failed, wait 30 seconds and retry.
